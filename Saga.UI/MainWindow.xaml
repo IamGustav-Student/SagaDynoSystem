@@ -1,11 +1,9 @@
 ﻿<Window x:Class="Saga.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:Saga.UI.ViewModels"
-        mc:Ignorable="d"
-        Title="SAGA DYNAMOMETER" Height="720" Width="1080"
+        xmlns:scott="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
+        Title="SAGA DYNAMOMETER PRO" Height="768" Width="1280"
         Background="#1E1E1E" WindowStartupLocation="CenterScreen">
 
     <Window.DataContext>
@@ -18,38 +16,71 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Panel Izquierdo -->
-        <Border Grid.Column="0" Background="#252526" BorderThickness="0,0,1,0" BorderBrush="#333">
+        <!-- PANEL IZQUIERDO -->
+        <Border Grid.Column="0" Background="#252526" BorderThickness="0,0,1,0" BorderBrush="#444">
             <StackPanel Margin="15">
-                <TextBlock Text="PUERTO COM" Foreground="Gray" FontWeight="Bold" Margin="0,0,0,5"/>
-                <TextBox Text="{Binding PuertoSeleccionado}" Height="30" FontSize="14" VerticalContentAlignment="Center"/>
 
-                <Button Command="{Binding ConectarCommand}" Content="CONECTAR" Height="40" Margin="0,10,0,0" Background="#007ACC" Foreground="White" FontWeight="Bold"/>
-                <Button Command="{Binding DesconectarCommand}" Content="DESCONECTAR" Height="40" Margin="0,10,0,0" Background="#E51400" Foreground="White" FontWeight="Bold"/>
+                <!-- SECCIÓN PUERTOS -->
+                <TextBlock Text="CONFIGURACIÓN" Foreground="#007ACC" FontWeight="Bold" Margin="0,0,0,10"/>
+                <TextBlock Text="PUERTO COM" Foreground="Gray" FontSize="12"/>
 
-                <Separator Margin="0,20" Background="#333"/>
+                <Grid Margin="0,5,0,15">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                <Button Command="{Binding IniciarEnsayoCommand}" Content="▶ INICIAR PRUEBA" Height="60" Background="#107C10" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                    <!-- Lista Desplegable de Puertos -->
+                    <ComboBox ItemsSource="{Binding PuertosDisponibles}" 
+                              SelectedItem="{Binding PuertoSeleccionado}"
+                              Height="30" Background="#333" Foreground="Black"/>
+
+                    <!-- Botón Refrescar (Pequeño al lado) -->
+                    <Button Grid.Column="1" Command="{Binding RefrescarPuertosCommand}" Content="↻" Width="30" Height="30" Margin="5,0,0,0" Background="#444" Foreground="White"/>
+                </Grid>
+
+                <Button Command="{Binding ConectarCommand}" Content="CONECTAR" Height="40" Background="#007ACC" Foreground="White" FontWeight="Bold" BorderThickness="0" Margin="0,0,0,5"/>
+                <Button Command="{Binding DesconectarCommand}" Content="DESCONECTAR" Height="40" Background="#333" Foreground="Gray" FontWeight="Bold" BorderThickness="0"/>
+
+                <Separator Margin="0,30" Background="#444"/>
+
+                <!-- SECCIÓN OPERACIÓN -->
+                <TextBlock Text="OPERACIÓN" Foreground="#007ACC" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                <!-- El botón Iniciar se deshabilita automáticamente si EnsayoEnCurso es true (gracias al ViewModel) -->
+                <Button Command="{Binding IniciarEnsayoCommand}" Content="▶ INICIAR PRUEBA" Height="60" Background="#107C10" Foreground="White" FontSize="16" FontWeight="Bold" BorderThickness="0" Margin="0,0,0,10"/>
+
+                <!-- Botón de Parada (Visible siempre, pero lógico usarlo en emergencia) -->
+                <Button Command="{Binding DetenerPruebaCommand}" Content="⏹ DETENER" Height="60" Background="#E51400" Foreground="White" FontSize="16" FontWeight="Bold" BorderThickness="0"/>
             </StackPanel>
         </Border>
 
-        <!-- Panel Derecho -->
+        <!-- PANEL DERECHO -->
         <Grid Grid.Column="1" Margin="20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="150"/>
                 <RowDefinition Height="30"/>
             </Grid.RowDefinitions>
 
-            <TextBlock Text="MONITOR DE DATOS" Foreground="White" FontSize="20" FontWeight="Light"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBlock Text="FUERZA vs POSICIÓN" Foreground="White" FontSize="20" FontWeight="Light"/>
+                <TextBlock Text="(Ciclo de Histéresis)" Foreground="Gray" FontSize="14" VerticalAlignment="Bottom" Margin="10,0,0,3"/>
+            </StackPanel>
 
-            <Border Grid.Row="1" Background="Black" Margin="0,10" CornerRadius="5">
+            <Border Grid.Row="1" BorderBrush="#444" BorderThickness="1" CornerRadius="5" ClipToBounds="True">
+                <scott:WpfPlot x:Name="GraficaPrincipal"/>
+            </Border>
+
+            <TextBlock Grid.Row="2" Text="DATOS CRUDOS (DEBUG)" Foreground="Gray" Margin="0,10,0,5" FontWeight="Bold"/>
+            <Border Grid.Row="2" Background="#111" CornerRadius="5" Margin="0,25,0,0">
                 <ScrollViewer>
-                    <TextBlock Text="{Binding LogData}" Foreground="#00FF00" FontFamily="Consolas" Margin="10"/>
+                    <TextBlock Text="{Binding LogData}" Foreground="#00FF00" FontFamily="Consolas" FontSize="12" Margin="10"/>
                 </ScrollViewer>
             </Border>
 
-            <TextBlock Grid.Row="2" Text="{Binding MensajeEstado}" Foreground="White" VerticalAlignment="Center"/>
+            <TextBlock Grid.Row="3" Text="{Binding MensajeEstado}" Foreground="White" VerticalAlignment="Center"/>
         </Grid>
     </Grid>
 </Window>

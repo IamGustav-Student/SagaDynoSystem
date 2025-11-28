@@ -10,18 +10,20 @@ namespace Saga.Core.Interfaces
         void Conectar(string puertoCom);
         void Desconectar();
 
+        // --- ESTA LINEA ES LA QUE FALTABA ---
+        string[] ObtenerPuertosDisponibles();
+
+        // Control Máquina
         Task HabilitarMaquinaAsync();
         Task DeshabilitarMaquinaAsync();
-
         Task EncenderMotorAsync(double velocidadHz);
         Task DetenerMotorAsync();
 
-        // Paso crítico que agregamos
+        // Adquisición de Buffer
         Task ConfigurarAdquisicionAsync(int cantidadPuntos);
-
-        // Lectura devuelve Lista, no string
         Task<List<DatoCrudo>> LeerDatosMuestreoAsync();
 
+        // Lectura de Sensores
         Task<string> LeerSensoresAsync();
     }
 }

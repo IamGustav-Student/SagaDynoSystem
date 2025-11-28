@@ -21,6 +21,12 @@ namespace Saga.Infrastructure.Driver
             _serialPort = new SerialPort();
         }
 
+        // --- IMPLEMENTACIÓN DEL MÉTODO NUEVO ---
+        public string[] ObtenerPuertosDisponibles()
+        {
+            return SerialPort.GetPortNames();
+        }
+
         public void Conectar(string puertoCom)
         {
             if (EstaConectado) _serialPort.Close();
@@ -31,14 +37,13 @@ namespace Saga.Infrastructure.Driver
             _serialPort.Parity = Parity.None;
             _serialPort.StopBits = StopBits.One;
             _serialPort.Handshake = Handshake.None;
-            _serialPort.ReadTimeout = 500;
+            _serialPort.ReadTimeout = 1000;
             _serialPort.WriteTimeout = 500;
 
             try
             {
                 _serialPort.Open();
                 _serialPort.DiscardInBuffer();
-                _serialPort.DiscardOutBuffer();
             }
             catch (Exception ex)
             {
@@ -76,7 +81,11 @@ namespace Saga.Infrastructure.Driver
 
         public async Task DetenerMotorAsync()
         {
-            await EnviarComandoVerificadoAsync(SagaProtocol.DetenerMotor);
+            if (EstaConectado)
+            {
+                _serialPort.Write(SagaProtocol.DetenerMotor);
+                await Task.Delay(50);
+            }
         }
 
         public async Task ConfigurarAdquisicionAsync(int cantidadPuntos)
@@ -86,49 +95,34 @@ namespace Saga.Infrastructure.Driver
             await EnviarComandoVerificadoAsync(comando);
         }
 
-        // Implementación real basada en frmVisor.frm (Timer tmrPide)
         public async Task<string> LeerSensoresAsync()
         {
             if (!EstaConectado) return string.Empty;
-
-            // VB6: .Output = ":C1AZ"
-            // Este comando pide valores instantáneos (no de buffer)
             _serialPort.DiscardInBuffer();
-            _serialPort.Write(":C1AZ");
-
-            // Esperamos un tiempo prudencial para que responda (VB6 usaba 0.1s)
+            _serialPort.Write(SagaProtocol.LeerSensores);
             await Task.Delay(100);
-
-            // Leemos la respuesta cruda
-            // La respuesta esperada tiene el formato: ...:C1BDFFFFPPPP...
-            // Donde FFFF es fuerza y PPPP es posición en Hex
-            string respuesta = _serialPort.ReadExisting();
-            return respuesta;
+            return _serialPort.ReadExisting();
         }
 
         public async Task<List<DatoCrudo>> LeerDatosMuestreoAsync()
         {
             if (!EstaConectado) return new List<DatoCrudo>();
 
-            // 1. Iniciar Buffer
             await EnviarComandoVerificadoAsync(SagaProtocol.IniciarBuffer);
             await Task.Delay(100);
 
-            // 2. Pedir Datos
             _serialPort.Write(SagaProtocol.SolicitarPaquete);
 
             byte[] buffer = new byte[SagaProtocol.TamañoPaqueteQ];
             int leidos = 0;
             int intentos = 0;
 
-            // Loop de lectura
             while (leidos < 10 && intentos < 20)
             {
                 await Task.Delay(50);
-                int disponibles = _serialPort.BytesToRead;
-                if (disponibles > 0)
+                if (_serialPort.BytesToRead > 0)
                 {
-                    int aLeer = Math.Min(disponibles, SagaProtocol.TamañoPaqueteQ - leidos);
+                    int aLeer = Math.Min(_serialPort.BytesToRead, SagaProtocol.TamañoPaqueteQ - leidos);
                     _serialPort.Read(buffer, leidos, aLeer);
                     leidos += aLeer;
                 }
@@ -136,49 +130,42 @@ namespace Saga.Infrastructure.Driver
             }
 
             string tramaRecibida = Encoding.ASCII.GetString(buffer, 0, leidos);
-
-            // Decodificar
             return DecodificarPaquete(tramaRecibida);
         }
 
         private async Task EnviarComandoVerificadoAsync(string comando)
         {
-            if (!EstaConectado) throw new Exception("Puerto desconectado");
+            if (!EstaConectado) throw new Exception("Desconectado");
             _serialPort.DiscardInBuffer();
             _serialPort.Write(comando);
             await Task.Delay(150);
-
-            // Opcional: Verificar respuesta :C99Z si es crítico
         }
 
         private List<DatoCrudo> DecodificarPaquete(string tramaHex)
         {
-            var listaPuntos = new List<DatoCrudo>();
+            var lista = new List<DatoCrudo>();
             tramaHex = tramaHex.Replace("\r", "").Replace("\n", "").Trim();
-            int longitudPunto = 7; // 4 fuerza + 3 posicion
-            int cantidadPuntos = tramaHex.Length / longitudPunto;
+            int longitudPunto = 7;
+            int cantidad = tramaHex.Length / longitudPunto;
 
-            for (int i = 0; i < cantidadPuntos; i++)
+            for (int i = 0; i < cantidad; i++)
             {
                 try
                 {
-                    int startIndex = i * longitudPunto;
-                    string hexFuerza = tramaHex.Substring(startIndex, 4);
-                    string hexPosicion = tramaHex.Substring(startIndex + 4, 3);
+                    int start = i * longitudPunto;
+                    string hFuerza = tramaHex.Substring(start, 4);
+                    string hPos = tramaHex.Substring(start + 4, 3);
 
-                    int valFuerza = Convert.ToInt32(hexFuerza, 16);
-                    int valPosicion = Convert.ToInt32(hexPosicion, 16);
-
-                    listaPuntos.Add(new DatoCrudo
+                    lista.Add(new DatoCrudo
                     {
                         Indice = i,
-                        FuerzaRaw = valFuerza * 0.1,
-                        PosicionRaw = valPosicion
+                        FuerzaRaw = Convert.ToInt32(hFuerza, 16) * 0.1,
+                        PosicionRaw = Convert.ToInt32(hPos, 16)
                     });
                 }
-                catch { /* Ignorar puntos corruptos */ }
+                catch { }
             }
-            return listaPuntos;
+            return lista;
         }
     }
 }
