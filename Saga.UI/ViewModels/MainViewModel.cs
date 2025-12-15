@@ -8,6 +8,7 @@ using System.Collections.ObjectModel; // Necesario para la lista de puertos
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using Saga.Core.Logic;
 
 namespace Saga.UI.ViewModels
 {
@@ -105,44 +106,54 @@ namespace Saga.UI.ViewModels
         [RelayCommand(CanExecute = nameof(PuedeIniciar))]
         private async Task IniciarEnsayo()
         {
-            EnsayoEnCurso = true; // Bloquea el botón Iniciar y Activa Detener
+            EnsayoEnCurso = true;
             MensajeEstado = "Iniciando secuencia...";
             LogData = "";
 
             try
             {
                 await _driver.HabilitarMaquinaAsync();
-
-                // Configurar cantidad
                 await _driver.ConfigurarAdquisicionAsync(100);
 
                 MensajeEstado = "Motor ON...";
-                await _driver.EncenderMotorAsync(5.0);
+                await _driver.EncenderMotorAsync(5.0); // Frecuencia del motor
 
-                MensajeEstado = "Adquiriendo...";
+                MensajeEstado = "Adquiriendo datos crudos...";
+                var datosCrudos = await _driver.LeerDatosMuestreoAsync();
 
-                // La lectura puede tardar. Si el usuario da DETENER, esto debe manejarse.
-                var datos = await _driver.LeerDatosMuestreoAsync();
+                MensajeEstado = "Procesando física (Calculando velocidad)...";
 
-                MensajeEstado = $"Finalizado. {datos.Count} datos.";
+                // --- NUEVO: CÁLCULO DE VELOCIDAD ---
+                // Asumimos una tasa de muestreo fija por ahora (ej: 50Hz) 
+                // En el futuro esto vendrá de la configuración real de la máquina
+                double sampleRate = 50.0;
+                var datosProcesados = CalculadoraFisica.ProcesarDatos(datosCrudos, sampleRate);
+                // -----------------------------------
 
-                // Graficar y Log
-                foreach (var p in datos) LogData += p.ToString() + "\n";
-                if (datos.Count > 0)
+                MensajeEstado = $"Finalizado. {datosProcesados.Count} puntos procesados.";
+
+                // Logueamos datos completos (F, P, V)
+                foreach (var p in datosProcesados)
                 {
-                    WeakReferenceMessenger.Default.Send(new UpdateGraphMessage(datos));
+                    LogData += $"T:{p.Tiempo:F2}s | P:{p.Posicion:F1}mm | F:{p.Fuerza:F1}kg | V:{p.Velocidad:F1}mm/s\n";
+                }
+
+                if (datosProcesados.Count > 0)
+                {
+                    // Enviamos datos PROCESADOS
+                    WeakReferenceMessenger.Default.Send(new UpdateGraphMessage(datosProcesados));
                 }
 
                 await _driver.DetenerMotorAsync();
             }
             catch (System.Exception ex)
             {
-                MensajeEstado = $"Interrumpido: {ex.Message}";
-                await _driver.DetenerMotorAsync(); // Seguridad
+                MensajeEstado = $"Error: {ex.Message}";
+                await _driver.DetenerMotorAsync();
             }
             finally
             {
-                EnsayoEnCurso = false; // Reactiva controles
+                EnsayoEnCurso = false;
             }
         }
 
@@ -159,5 +170,6 @@ namespace Saga.UI.ViewModels
                 // y el flujo de IniciarEnsayo caerá en el 'catch' o terminará.
             }
         }
+        
     }
 }
